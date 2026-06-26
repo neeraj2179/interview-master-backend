@@ -1,0 +1,262 @@
+// This is your Prisma schema file
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ────────────────────────────────────────────────────────────
+// ENUMS
+// ────────────────────────────────────────────────────────────
+
+enum RoleName {
+  ADMIN
+  USER
+}
+
+enum Difficulty {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum QuestionType {
+  SINGLE_CORRECT
+}
+
+// ────────────────────────────────────────────────────────────
+// ROLES
+// ────────────────────────────────────────────────────────────
+
+model Role {
+  id        Int      @id @default(autoincrement())
+  name      RoleName @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users User[]
+
+  @@map("roles")
+}
+
+// ────────────────────────────────────────────────────────────
+// USERS
+// ────────────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  password     String
+  refreshToken String?   @map("refresh_token")
+  isActive     Boolean   @default(true) @map("is_active")
+  roleId       Int       @map("role_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  role          Role           @relation(fields: [roleId], references: [id])
+  attempts      Attempt[]
+  userProgress  UserProgress[]
+
+  @@map("users")
+}
+
+// ────────────────────────────────────────────────────────────
+// TECHNOLOGIES
+// ────────────────────────────────────────────────────────────
+
+model Technology {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  icon        String?
+  color       String?
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  topics       Topic[]
+  questions    Question[]
+  tests        Test[]
+  userProgress UserProgress[]
+
+  @@map("technologies")
+}
+
+// ────────────────────────────────────────────────────────────
+// TOPICS
+// ────────────────────────────────────────────────────────────
+
+model Topic {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String
+  description  String?
+  content      String?  @db.Text
+  technologyId String   @map("technology_id")
+  isActive     Boolean  @default(true) @map("is_active")
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  technology Technology @relation(fields: [technologyId], references: [id], onDelete: Cascade)
+  questions  Question[]
+  tests      Test[]
+
+  @@unique([technologyId, slug])
+  @@map("topics")
+}
+
+// ────────────────────────────────────────────────────────────
+// QUESTIONS
+// ────────────────────────────────────────────────────────────
+
+model Question {
+  id           String       @id @default(cuid())
+  text         String
+  type         QuestionType @default(SINGLE_CORRECT)
+  difficulty   Difficulty   @default(BEGINNER)
+  explanation  String?
+  technologyId String       @map("technology_id")
+  topicId      String?      @map("topic_id")
+  isActive     Boolean      @default(true) @map("is_active")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  technology     Technology       @relation(fields: [technologyId], references: [id], onDelete: Cascade)
+  topic          Topic?           @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  options        QuestionOption[]
+  testQuestions  TestQuestion[]
+  attemptAnswers AttemptAnswer[]
+
+  @@map("questions")
+}
+
+// ────────────────────────────────────────────────────────────
+// QUESTION OPTIONS
+// ────────────────────────────────────────────────────────────
+
+model QuestionOption {
+  id         String   @id @default(cuid())
+  questionId String   @map("question_id")
+  text       String
+  isCorrect  Boolean  @default(false) @map("is_correct")
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  question       Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  attemptAnswers AttemptAnswer[]
+
+  @@map("question_options")
+}
+
+// ────────────────────────────────────────────────────────────
+// TESTS
+// ────────────────────────────────────────────────────────────
+
+model Test {
+  id             String   @id @default(cuid())
+  title          String
+  description    String?
+  technologyId   String   @map("technology_id")
+  topicId        String?  @map("topic_id")
+  durationMinutes Int     @default(30) @map("duration_minutes")
+  totalQuestions Int      @default(10) @map("total_questions")
+  passingScore   Int      @default(60) @map("passing_score")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  technology    Technology     @relation(fields: [technologyId], references: [id], onDelete: Cascade)
+  topic         Topic?         @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  testQuestions TestQuestion[]
+  attempts      Attempt[]
+
+  @@map("tests")
+}
+
+// ────────────────────────────────────────────────────────────
+// TEST QUESTIONS (join table)
+// ────────────────────────────────────────────────────────────
+
+model TestQuestion {
+  testId     String @map("test_id")
+  questionId String @map("question_id")
+  sortOrder  Int    @default(0) @map("sort_order")
+
+  test     Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@id([testId, questionId])
+  @@map("test_questions")
+}
+
+// ────────────────────────────────────────────────────────────
+// ATTEMPTS
+// ────────────────────────────────────────────────────────────
+
+model Attempt {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  testId      String    @map("test_id")
+  score       Int       @default(0)
+  totalMarks  Int       @default(0) @map("total_marks")
+  isPassed    Boolean   @default(false) @map("is_passed")
+  timeTaken   Int?      @map("time_taken") // seconds
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  test           Test            @relation(fields: [testId], references: [id], onDelete: Cascade)
+  attemptAnswers AttemptAnswer[]
+
+  @@map("attempts")
+}
+
+// ────────────────────────────────────────────────────────────
+// ATTEMPT ANSWERS
+// ────────────────────────────────────────────────────────────
+
+model AttemptAnswer {
+  id               String  @id @default(cuid())
+  attemptId        String  @map("attempt_id")
+  questionId       String  @map("question_id")
+  selectedOptionId String? @map("selected_option_id")
+  isCorrect        Boolean @default(false) @map("is_correct")
+
+  attempt        Attempt         @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question       Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOption QuestionOption? @relation(fields: [selectedOptionId], references: [id], onDelete: SetNull)
+
+  @@unique([attemptId, questionId])
+  @@map("attempt_answers")
+}
+
+// ────────────────────────────────────────────────────────────
+// USER PROGRESS
+// ────────────────────────────────────────────────────────────
+
+model UserProgress {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  technologyId    String   @map("technology_id")
+  totalAttempted  Int      @default(0) @map("total_attempted")
+  totalCorrect    Int      @default(0) @map("total_correct")
+  totalTests      Int      @default(0) @map("total_tests")
+  testsPassed     Int      @default(0) @map("tests_passed")
+  lastActivityAt  DateTime @default(now()) @map("last_activity_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  technology Technology @relation(fields: [technologyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, technologyId])
+  @@map("user_progress")
+}
